@@ -35,12 +35,15 @@ git clone https://github.com/ghost-guest/crush-zhizq.git
 cd crush-zhizq
 
 # Build
-go build -o crush .
+go build -o zhizq .
 
 # Install to your PATH
-sudo mv crush /usr/local/bin/
+sudo mv zhizq /usr/local/bin/
 # Or for user-only install:
-mkdir -p ~/bin && mv crush ~/bin/ && export PATH="$HOME/bin:$PATH"
+mkdir -p ~/bin && mv zhizq ~/bin/ && export PATH="$HOME/bin:$PATH"
+
+# Run
+zhizq
 ```
 
 ### From Upstream (Original Crush)
@@ -194,6 +197,18 @@ go install github.com/charmbracelet/crush@latest
 > [Slack][slack] or [Discord][discord] and nerd snipe the rest of us.
 
 ## Getting Started
+
+### For This Fork
+
+After building from source:
+
+```bash
+zhizq
+```
+
+Select your provider and model, then start coding!
+
+### For Original Crush
 
 The quickest way to get started is to grab an API key for your preferred
 provider such as Anthropic, OpenAI, Groq, OpenRouter, or Vercel AI Gateway and just start
