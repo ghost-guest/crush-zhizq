@@ -10,6 +10,8 @@
 
 <p align="center"><img width="800" alt="Crush Demo" src="https://github.com/user-attachments/assets/58280caf-851b-470a-b6f7-d5c4ea8a1968" /></p>
 
+English | [简体中文](README_CN.md)
+
 ## Fork Changes
 
 - ⚡ **Disabled auto title generation** - Saves 50% API calls (no more double requests per conversation)
