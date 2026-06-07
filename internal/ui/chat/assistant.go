@@ -244,15 +244,15 @@ func (a *AssistantMessageItem) Render(width int) string {
 			return cached
 		}
 	}
-	focused := a.sty.Messages.AssistantFocused.Render()
-	blurred := a.sty.Messages.AssistantBlurred.Render()
+	focused := a.sty.Messages.AssistantFocused
+	blurred := a.sty.Messages.AssistantBlurred
 	rendered := a.RawRender(width)
 	lines := strings.Split(rendered, "\n")
 	for i, line := range lines {
 		if a.focused {
-			lines[i] = focused + line
+			lines[i] = focused.Render(line)
 		} else {
-			lines[i] = blurred + line
+			lines[i] = blurred.Render(line)
 		}
 	}
 	out := strings.Join(lines, "\n")
