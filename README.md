@@ -1,15 +1,19 @@
-# Crush
+# Crush (zhizq Fork)
 
 <p align="center">
     <a href="https://stuff.charm.sh/crush/charm-crush.png"><img width="450" alt="Charm Crush Logo" src="https://github.com/user-attachments/assets/cf8ca3ce-8b02-43f0-9d0f-5a331488da4b" /></a><br />
-    <a href="https://github.com/charmbracelet/crush/releases"><img src="https://img.shields.io/github/release/charmbracelet/crush" alt="Latest Release"></a>
-    <a href="https://github.com/charmbracelet/crush/actions"><img src="https://github.com/charmbracelet/crush/actions/workflows/build.yml/badge.svg" alt="Build Status"></a>
+    <a href="https://github.com/ghost-guest/crush-zhizq/releases"><img src="https://img.shields.io/github/release/ghost-guest/crush-zhizq" alt="Latest Release"></a>
 </p>
 
 <p align="center">Your new coding bestie, now available in your favourite terminal.<br />Your tools, your code, and your workflows, wired into your LLM of choice.</p>
 <p align="center">终端里的编程新搭档，<br />无缝接入你的工具、代码与工作流，全面兼容主流 LLM 模型。</p>
 
 <p align="center"><img width="800" alt="Crush Demo" src="https://github.com/user-attachments/assets/58280caf-851b-470a-b6f7-d5c4ea8a1968" /></p>
+
+## Fork Changes
+
+- ⚡ **Disabled auto title generation** - Saves 50% API calls (no more double requests per conversation)
+- 🔧 Based on upstream [charmbracelet/crush](https://github.com/charmbracelet/crush)
 
 ## Features
 
@@ -22,6 +26,24 @@
 - **Industrial Grade:** built on the Charm ecosystem, powering 25k+ applications, from leading open source projects to business-critical infrastructure
 
 ## Installation
+
+### From Source (Recommended for this fork)
+
+```bash
+# Clone this fork
+git clone https://github.com/ghost-guest/crush-zhizq.git
+cd crush-zhizq
+
+# Build
+go build -o crush .
+
+# Install to your PATH
+sudo mv crush /usr/local/bin/
+# Or for user-only install:
+mkdir -p ~/bin && mv crush ~/bin/ && export PATH="$HOME/bin:$PATH"
+```
+
+### From Upstream (Original Crush)
 
 Use a package manager:
 
