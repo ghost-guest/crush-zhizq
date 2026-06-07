@@ -106,6 +106,8 @@ zhizq
 
 ### 基础配置示例
 
+参考 `crush.json.example`：
+
 ```json
 {
   "providers": {
