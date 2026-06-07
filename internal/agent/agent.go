@@ -682,12 +682,14 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 
 	var wg sync.WaitGroup
 	// Generate title if first message.
-	if len(msgs) == 0 {
-		titleCtx := ctx // Copy to avoid race with ctx reassignment below.
-		wg.Go(func() {
-			a.generateTitle(titleCtx, call.SessionID, call.Prompt)
-		})
-	}
+	// DISABLED: Auto title generation wastes API calls and tokens.
+	// Users can manually rename sessions if needed.
+	// if len(msgs) == 0 {
+	// 	titleCtx := ctx // Copy to avoid race with ctx reassignment below.
+	// 	wg.Go(func() {
+	// 		a.generateTitle(titleCtx, call.SessionID, call.Prompt)
+	// 	})
+	// }
 	defer wg.Wait()
 
 	// Add the user message to the session.
