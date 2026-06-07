@@ -192,36 +192,40 @@ func Providers(cfg *Config) ([]catwalk.Provider, error) {
 			providerList = slices.Collect(providers.Seq())
 		}
 
-		// Add custom providers from config
-		for providerCfg := range cfg.Providers.Seq() {
-			if providerCfg.ID == "" || providerCfg.APIKey == "" {
-				continue
-			}
-			customProvider := catwalk.Provider{
-				ID:          catwalk.InferenceProvider(providerCfg.ID),
-				Name:        cmp.Or(providerCfg.Name, providerCfg.ID),
-				APIEndpoint: providerCfg.BaseURL,
-				Type:        cmp.Or(providerCfg.Type, catwalk.TypeOpenAI),
-				Models:      make([]catwalk.Model, 0, len(providerCfg.Models)),
-			}
-			for _, modelCfg := range providerCfg.Models {
-				if modelCfg.ID == "" {
-					continue
-				}
-				customProvider.Models = append(customProvider.Models, catwalk.Model{
-					ID:            modelCfg.ID,
-					Name:          cmp.Or(modelCfg.Name, modelCfg.ID),
-					ContextWindow: modelCfg.ContextWindow,
-				})
-			}
-			if len(customProvider.Models) > 0 {
-				providerList = append(providerList, customProvider)
-			}
-		}
-
 		providerErr = errors.Join(errs...)
 	})
-	return providerList, providerErr
+
+	// Add custom providers from config (outside Do to support dynamic config)
+	result := make([]catwalk.Provider, len(providerList))
+	copy(result, providerList)
+
+	for providerCfg := range cfg.Providers.Seq() {
+		if providerCfg.ID == "" || providerCfg.APIKey == "" {
+			continue
+		}
+		customProvider := catwalk.Provider{
+			ID:          catwalk.InferenceProvider(providerCfg.ID),
+			Name:        cmp.Or(providerCfg.Name, providerCfg.ID),
+			APIEndpoint: providerCfg.BaseURL,
+			Type:        cmp.Or(providerCfg.Type, catwalk.TypeOpenAI),
+			Models:      make([]catwalk.Model, 0, len(providerCfg.Models)),
+		}
+		for _, modelCfg := range providerCfg.Models {
+			if modelCfg.ID == "" {
+				continue
+			}
+			customProvider.Models = append(customProvider.Models, catwalk.Model{
+				ID:            modelCfg.ID,
+				Name:          cmp.Or(modelCfg.Name, modelCfg.ID),
+				ContextWindow: modelCfg.ContextWindow,
+			})
+		}
+		if len(customProvider.Models) > 0 {
+			result = append(result, customProvider)
+		}
+	}
+
+	return result, providerErr
 }
 
 type cache[T any] struct {
