@@ -29,6 +29,8 @@
 
 ### From Source (Recommended for this fork)
 
+**Linux / macOS:**
+
 ```bash
 # Clone this fork
 git clone https://github.com/ghost-guest/crush-zhizq.git
@@ -41,6 +43,29 @@ go build -o zhizq .
 sudo mv zhizq /usr/local/bin/
 # Or for user-only install:
 mkdir -p ~/bin && mv zhizq ~/bin/ && export PATH="$HOME/bin:$PATH"
+
+# Run
+zhizq
+```
+
+**Windows:**
+
+```powershell
+# Clone this fork
+git clone https://github.com/ghost-guest/crush-zhizq.git
+cd crush-zhizq
+
+# Build
+go build -o zhizq.exe .
+
+# Install to your PATH (choose one method):
+
+# Method 1: Copy to a directory in PATH
+move zhizq.exe C:\Windows\System32\
+
+# Method 2: Add current directory to PATH (run as Administrator)
+$env:Path += ";" + (Get-Location).Path
+[Environment]::SetEnvironmentVariable("Path", $env:Path, [EnvironmentVariableTarget]::User)
 
 # Run
 zhizq
@@ -273,9 +298,15 @@ Crush runs great with no configuration. That said, if you do need or want to
 customize Crush, configuration can be added either local to the project itself,
 or globally, with the following priority:
 
+**Linux / macOS:**
 1. `.crush.json`
 2. `crush.json`
 3. `$HOME/.config/crush/crush.json`
+
+**Windows:**
+1. `.crush.json`
+2. `crush.json`
+3. `%USERPROFILE%\.config\crush\crush.json` or `%APPDATA%\crush\crush.json`
 
 Configuration itself is stored as a JSON object:
 
