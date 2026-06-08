@@ -731,24 +731,13 @@ func configureSelectedModels(store *ConfigStore, knownProviders []catwalk.Provid
 // up. Global user-level config locations are always included
 // regardless of the boundary.
 func lookupConfigs(cwd string) []string {
-	// prepend default config paths
+	// Only use global config paths, ignore project-local configs
 	configPaths := []string{
 		GlobalConfig(),
 		GlobalConfigData(),
 	}
 
-	configNames := []string{appName + ".json", "." + appName + ".json"}
-
-	foundConfigs, err := fsext.LookupBounded(cwd, projectBoundary(cwd), configNames...)
-	if err != nil {
-		// returns at least default configs
-		return configPaths
-	}
-
-	// reverse order so last config has more priority
-	slices.Reverse(foundConfigs)
-
-	return append(configPaths, foundConfigs...)
+	return configPaths
 }
 
 func loadFromConfigPaths(configPaths []string) (*Config, []string, error) {
