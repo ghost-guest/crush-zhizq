@@ -3,7 +3,6 @@ package dialog
 import (
 	"cmp"
 	"fmt"
-	"slices"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
@@ -360,61 +359,13 @@ func (m *Models) setProviderItems() error {
 	currentModel := cfg.Models[selectedType]
 	recentItems := cfg.RecentModels[selectedType]
 
-	// Track providers already added to avoid duplicates
-	addedProviders := make(map[string]bool)
-
-	// Get a list of known providers to compare against
-	knownProviders, err := config.Providers(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to get providers: %w", err)
-	}
-
-	containsProviderFunc := func(id string) func(p catwalk.Provider) bool {
-		return func(p catwalk.Provider) bool {
-			return p.ID == catwalk.InferenceProvider(id)
-		}
-	}
-
 	// itemsMap contains the keys of added model items.
 	itemsMap := make(map[string]*ModelItem)
 	groups := []ModelGroup{}
-	for id, p := range cfg.Providers.Seq2() {
-		if p.Disable {
-			continue
-		}
 
-		// Check if this provider is not in the known providers list
-		if !slices.ContainsFunc(knownProviders, containsProviderFunc(id)) ||
-			!slices.ContainsFunc(m.providers, containsProviderFunc(id)) {
-			provider := p.ToProvider()
-
-			// Add this unknown provider to the list
-			name := cmp.Or(p.Name, id)
-
-			addedProviders[id] = true
-
-			group := NewModelGroup(t, name, true)
-			for _, model := range p.Models {
-				item := NewModelItem(t, provider, model, m.modelType, false)
-				group.AppendItems(item)
-				itemsMap[item.ID()] = item
-				if model.ID == currentModel.Model && string(provider.ID) == currentModel.Provider {
-					selectedItemID = item.ID()
-				}
-			}
-			if len(group.Items) > 0 {
-				groups = append(groups, group)
-			}
-		}
-	}
-
-	// Now add known providers from the predefined list.
-	// Providers already has Hyper at the front of the list.
+	// Add all providers from the list (includes both predefined and custom)
 	for _, provider := range m.providers {
 		providerID := string(provider.ID)
-		if addedProviders[providerID] {
-			continue
-		}
 
 		providerConfig, providerConfigured := cfg.Providers.Get(providerID)
 		if providerConfigured && providerConfig.Disable {
