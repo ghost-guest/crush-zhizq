@@ -18,8 +18,8 @@ func ThemeForProvider(providerID string) Styles {
 // for the UI.
 func CharmtonePantera() Styles {
 	return quickStyle(quickStyleOpts{
-		primary:   charmtone.Charple,
-		secondary: charmtone.Dolly,
+		primary:   charmtone.Malibu,    // Brighter cyan for logo
+		secondary: charmtone.Blush,     // Brighter pink for logo
 		accent:    charmtone.Bok,
 		keyword:   charmtone.Blush,
 

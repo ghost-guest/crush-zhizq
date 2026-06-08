@@ -50,15 +50,16 @@ func (h *header) refresh() {
 	if !isHyper {
 		charm = " " + charm
 	}
-	name := "CRUSH"
+	name := "ZHIZQ"
 	if isHyper {
-		name = "HYPERCRUSH"
+		name = "HYPERZHIZQ"
 	}
 	h.compactLogo = t.Header.Charm.Render(charm) + " " +
 		styles.ApplyBoldForegroundGrad(t.Header.LogoGradCanvas, name, t.Header.LogoGradFromColor, t.Header.LogoGradToColor) + " "
 	// Force drawHeader to re-render the wide logo on the next frame.
 	h.width = 0
-	h.logo = ""
+	// Initialize logo with compactLogo
+	h.logo = h.compactLogo
 }
 
 // drawHeader draws the header for the given session.
@@ -73,7 +74,7 @@ func (h *header) drawHeader(
 ) {
 	t := h.com.Styles
 	if width != h.width || compact != h.compact {
-		// Always use compact logo (simple text instead of big banner)
+		// Always use compactLogo (ZHIZQ with gradient)
 		h.logo = h.compactLogo
 	}
 

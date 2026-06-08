@@ -3193,7 +3193,9 @@ func (m *UI) renderEditorView(width int) string {
 
 // cacheSidebarLogo renders and caches the sidebar logo at the specified width.
 func (m *UI) cacheSidebarLogo(width int) {
-	m.sidebarLogo = renderLogo(m.com.Styles, true, m.com.IsHyper(), width)
+	m.sidebarLogo = logo.SmallRender(m.com.Styles, width, logo.Opts{
+		Hyper: m.com.IsHyper(),
+	})
 }
 
 // applyTheme replaces the active styles with the given theme, drops the
