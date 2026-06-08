@@ -1,13 +1,13 @@
-# Crush (zhizq Fork)
+# ZHIZQ
 
 <p align="center">
-    <a href="https://stuff.charm.sh/crush/charm-crush.png"><img width="450" alt="Charm Crush Logo" src="https://github.com/user-attachments/assets/cf8ca3ce-8b02-43f0-9d0f-5a331488da4b" /></a><br />
+    <a href="https://stuff.charm.sh/crush/charm-crush.png"><img width="450" alt="Charm ZHIZQ Logo" src="https://github.com/user-attachments/assets/cf8ca3ce-8b02-43f0-9d0f-5a331488da4b" /></a><br />
     <a href="https://github.com/ghost-guest/crush-zhizq/releases"><img src="https://img.shields.io/github/release/ghost-guest/crush-zhizq" alt="Latest Release"></a>
 </p>
 
 <p align="center">终端里的 AI 编程助手<br />接入你的工具、代码和工作流，兼容主流 LLM 模型</p>
 
-<p align="center"><img width="800" alt="Crush Demo" src="https://github.com/user-attachments/assets/58280caf-851b-470a-b6f7-d5c4ea8a1968" /></p>
+<p align="center"><img width="800" alt="ZHIZQ Demo" src="https://github.com/user-attachments/assets/58280caf-851b-470a-b6f7-d5c4ea8a1968" /></p>
 
 [English](README.md) | 简体中文
 
@@ -150,7 +150,7 @@ export OPENAI_API_KEY="sk-xxx"
 
 ### 项目上下文
 
-在项目目录创建 `AGENTS.md` 或 `crush.md` 文件，Crush 会自动读取作为项目背景：
+在项目目录创建 `AGENTS.md` 或 `crush.md` 文件，ZHIZQ 会自动读取作为项目背景：
 
 ```markdown
 # 项目说明
