@@ -33,6 +33,13 @@ var (
 	providerErr  error
 )
 
+// ResetProviders clears the provider cache, forcing a reload on next Providers() call.
+func ResetProviders() {
+	providerOnce = sync.Once{}
+	providerList = nil
+	providerErr = nil
+}
+
 // file to cache provider data
 func cachePathFor(name string) string {
 	xdgDataHome := os.Getenv("XDG_DATA_HOME")

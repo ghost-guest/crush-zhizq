@@ -283,6 +283,8 @@ func (a *AssistantMessageItem) prefixCacheKey(cappedWidth int) uint64 {
 		}
 		_, _ = h.Write(buf[:])
 	}
+	// Version 2: fixed Style.Render() usage (was calling Render() with no args)
+	writeU64(2)
 	writeU64(uint64(cappedWidth))
 	writeU64(thinkSrc)
 	writeU64(thinkExtra)

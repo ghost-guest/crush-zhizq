@@ -3,6 +3,7 @@ package dialog
 import (
 	"cmp"
 	"fmt"
+	"log/slog"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
@@ -141,6 +142,9 @@ func NewModels(com *common.Common, isOnboarding bool) (*Models, error) {
 		key.WithHelp("↑", "previous item"),
 	)
 	m.keyMap.Close = CloseKey
+
+	// Force reload providers with current config to include custom providers
+	config.ResetProviders()
 
 	var err error
 	m.providers, err = config.Providers(m.com.Config())
@@ -362,6 +366,20 @@ func (m *Models) setProviderItems() error {
 	// itemsMap contains the keys of added model items.
 	itemsMap := make(map[string]*ModelItem)
 	groups := []ModelGroup{}
+
+	// Debug: log provider count
+	slog.Info("Loading providers for model selector",
+		"total_providers", len(m.providers),
+		"config_providers", cfg.Providers.Len(),
+	)
+	for i, p := range m.providers {
+		slog.Info("Provider in list",
+			"index", i,
+			"id", string(p.ID),
+			"name", p.Name,
+			"models", len(p.Models),
+		)
+	}
 
 	// Add all providers from the list (includes both predefined and custom)
 	for _, provider := range m.providers {

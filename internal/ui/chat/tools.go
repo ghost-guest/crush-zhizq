@@ -356,14 +356,16 @@ func (t *baseToolMessageItem) Render(width int) string {
 	// Bypass the cache while spinning (RawRender output is
 	// frame-dependent) or while a highlight range is active.
 	useCache := !t.isSpinning() && !t.isHighlighted()
+	// Cache key version 2: fixed Style.Render() usage
+	const cacheVersion = 1000
 	var key uint64
 	switch {
 	case t.isCompact:
-		key = 2
+		key = cacheVersion + 2
 	case t.focused:
-		key = 1
+		key = cacheVersion + 1
 	default:
-		key = 0
+		key = cacheVersion + 0
 	}
 	if useCache {
 		if cached, ok := t.getCachedPrefixedRender(width, key); ok {

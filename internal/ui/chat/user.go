@@ -128,9 +128,13 @@ func (m *UserMessageItem) Render(width int) string {
 	// cache. Highlight changes are intentionally applied "above" the
 	// prefix cache.
 	useCache := !m.isHighlighted()
+	// Cache key version 2: fixed Style.Render() usage
+	const cacheVersion = 1000
 	var key uint64
 	if m.focused {
-		key = 1
+		key = cacheVersion + 1
+	} else {
+		key = cacheVersion + 0
 	}
 	if useCache {
 		if cached, ok := m.getCachedPrefixedRender(width, key); ok {
