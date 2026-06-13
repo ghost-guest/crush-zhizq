@@ -104,8 +104,8 @@ func DefaultKeyMap() KeyMap {
 	}
 
 	km.Editor.AddFile = key.NewBinding(
-		key.WithKeys("/"),
-		key.WithHelp("/", "add file"),
+		key.WithKeys("ctrl+/"),
+		key.WithHelp("ctrl+/", "add file"),
 	)
 	km.Editor.SendMessage = key.NewBinding(
 		key.WithKeys("enter"),
@@ -135,8 +135,8 @@ func DefaultKeyMap() KeyMap {
 		key.WithHelp("@", "mention file"),
 	)
 	km.Editor.Commands = key.NewBinding(
-		key.WithKeys("/"),
-		key.WithHelp("/", "commands"),
+		key.WithKeys("ctrl+p"),
+		key.WithHelp("ctrl+p", "commands"),
 	)
 	km.Editor.AttachmentDeleteMode = key.NewBinding(
 		key.WithKeys("ctrl+r"),

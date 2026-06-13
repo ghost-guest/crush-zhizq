@@ -920,10 +920,20 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyPressMsg:
+		// DEBUG: Log all key presses
+		f, _ := os.OpenFile("/tmp/crush_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		fmt.Fprintf(f, "KeyPressMsg: %v\n", msg.String())
+		f.Close()
+		
 		if cmd := m.handleKeyPressMsg(msg); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	case tea.PasteMsg:
+		// DEBUG: Log all paste events
+		f, _ := os.OpenFile("/tmp/crush_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		fmt.Fprintf(f, "PasteMsg: len=%d\n", len(msg.Content))
+		f.Close()
+		
 		if cmd := m.handlePasteMsg(msg); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -1915,6 +1925,13 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 	case uiChat, uiLanding:
 		switch m.focus {
 		case uiFocusEditor:
+			// Check for paste image FIRST, before any other component handles ctrl+v
+			if key.Matches(msg, m.keyMap.Editor.PasteImage) {
+				slog.Info("PasteImage triggered via ctrl+v")
+				cmds = append(cmds, m.pasteImageFromClipboard)
+				return tea.Batch(cmds...)
+			}
+
 			// Handle completions if open.
 			if m.completionsOpen {
 				if msg, ok := m.completions.Update(msg); ok {
@@ -1942,18 +1959,9 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 
 			switch {
 			case key.Matches(msg, m.keyMap.Editor.AddImage):
-				if !m.currentModelSupportsImages() {
-					break
-				}
 				if cmd := m.openFilesDialog(); cmd != nil {
 					cmds = append(cmds, cmd)
 				}
-
-			case key.Matches(msg, m.keyMap.Editor.PasteImage):
-				if !m.currentModelSupportsImages() {
-					break
-				}
-				cmds = append(cmds, m.pasteImageFromClipboard)
 
 			case key.Matches(msg, m.keyMap.Editor.SendMessage):
 				prevHeight := m.textarea.Height()
@@ -1976,6 +1984,11 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				value = strings.TrimSpace(value)
 				if value == "exit" || value == "quit" {
 					return m.openQuitDialog()
+				}
+				if cmd, ok := m.handleSlashCommand(value); ok {
+					m.randomizePlaceholders()
+					m.historyReset()
+					return tea.Batch(cmd, m.loadPromptHistory())
 				}
 
 				attachments := m.attachments.List()
@@ -2367,7 +2380,7 @@ func (m *UI) ShortHelp() []key.Binding {
 	tab := k.Tab
 	commands := k.Commands
 	if m.focus == uiFocusEditor && m.textarea.Value() == "" {
-		commands.SetHelp("/ or ctrl+p", "commands")
+		commands.SetHelp("ctrl+p", "commands")
 	}
 
 	switch m.state {
@@ -2448,7 +2461,7 @@ func (m *UI) FullHelp() [][]key.Binding {
 	hasSession := m.hasSession()
 	commands := k.Commands
 	if m.focus == uiFocusEditor && m.textarea.Value() == "" {
-		commands.SetHelp("/ or ctrl+p", "commands")
+		commands.SetHelp("ctrl+p", "commands")
 	}
 
 	switch m.state {
@@ -3253,10 +3266,292 @@ func (m *UI) attachSkill(skillID, name string) tea.Cmd {
 	}
 }
 
+func (m *UI) handleSlashCommand(input string) (tea.Cmd, bool) {
+	if !strings.HasPrefix(input, "/") {
+		return nil, false
+	}
+	fields := strings.Fields(input)
+	if len(fields) == 0 {
+		return nil, false
+	}
+	cmd := strings.TrimPrefix(fields[0], "/")
+	args := fields[1:]
+	switch cmd {
+	case "model":
+		if len(args) == 0 {
+			return m.openModelsDialog(), true
+		}
+		return m.switchModelCommand(args[0]), true
+	case "provider":
+		return m.switchProviderCommand(args), true
+	case "profile":
+		return m.activateProfileCommand(args), true
+	case "mcp":
+		return m.mcpCommand(args), true
+	default:
+		return m.skillSlashCommand(cmd, strings.Join(args, " ")), true
+	}
+}
+
+func (m *UI) skillSlashCommand(name, prompt string) tea.Cmd {
+	return func() tea.Msg {
+		entries, err := m.com.Workspace.ListSkills(context.Background())
+		if err != nil {
+			return util.NewErrorMsg(err)
+		}
+		for _, entry := range entries {
+			if entry.Name != name && strings.TrimPrefix(entry.Label, "user:") != name && strings.TrimPrefix(entry.Label, "project:") != name {
+				continue
+			}
+			skill := &skills.Skill{
+				Name:          entry.Name,
+				Description:   entry.Description,
+				SkillFilePath: entry.ID,
+			}
+			content := skill.FormatInvocation()
+			if prompt != "" {
+				content += "\n\n" + prompt
+			}
+			return m.sendMessage(content)()
+		}
+		return util.NewWarnMsg("Unknown slash command or skill: /" + name)
+	}
+}
+
+func (m *UI) switchModelCommand(modelArg string) tea.Cmd {
+	return func() tea.Msg {
+		cfg := m.com.Config()
+		if cfg == nil {
+			return util.NewErrorMsg(errors.New("configuration not found"))
+		}
+		model, err := resolveSlashModel(cfg, modelArg)
+		if err != nil {
+			return util.NewErrorMsg(err)
+		}
+		if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, config.SelectedModelTypeLarge, model); err != nil {
+			return util.NewErrorMsg(err)
+		}
+		if err := m.com.Workspace.UpdateAgentModel(context.Background()); err != nil {
+			return util.NewErrorMsg(err)
+		}
+		return util.NewInfoMsg(fmt.Sprintf("Large model changed to %s/%s", model.Provider, model.Model))
+	}
+}
+
+func (m *UI) switchProviderCommand(args []string) tea.Cmd {
+	return func() tea.Msg {
+		cfg := m.com.Config()
+		if cfg == nil {
+			return util.NewErrorMsg(errors.New("configuration not found"))
+		}
+		if len(args) == 0 {
+			return util.NewInfoMsg("Usage: /provider <provider> [model]")
+		}
+		providerID := args[0]
+		modelID := ""
+		if len(args) > 1 {
+			modelID = args[1]
+		}
+		model, err := resolveProviderModel(cfg, providerID, modelID)
+		if err != nil {
+			return util.NewErrorMsg(err)
+		}
+		if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, config.SelectedModelTypeLarge, model); err != nil {
+			return util.NewErrorMsg(err)
+		}
+		if err := m.com.Workspace.UpdateAgentModel(context.Background()); err != nil {
+			return util.NewErrorMsg(err)
+		}
+		return util.NewInfoMsg(fmt.Sprintf("Provider switched to %s (%s)", model.Provider, model.Model))
+	}
+}
+
+func (m *UI) activateProfileCommand(args []string) tea.Cmd {
+	return func() tea.Msg {
+		cfg := m.com.Config()
+		if cfg == nil {
+			return util.NewErrorMsg(errors.New("configuration not found"))
+		}
+		if len(args) == 0 {
+			names := make([]string, 0, len(cfg.ProviderProfiles))
+			for name := range cfg.ProviderProfiles {
+				names = append(names, name)
+			}
+			slices.Sort(names)
+			if len(names) == 0 {
+				return util.NewWarnMsg("No provider profiles configured")
+			}
+			return util.NewInfoMsg("Profiles: " + strings.Join(names, ", "))
+		}
+		name := args[0]
+		if err := m.com.Workspace.ActivateProviderProfile(config.ScopeGlobal, name); err != nil {
+			return util.NewErrorMsg(err)
+		}
+		if err := m.com.Workspace.UpdateAgentModel(context.Background()); err != nil {
+			return util.NewErrorMsg(err)
+		}
+		return util.NewInfoMsg("Provider profile activated: " + name)
+	}
+}
+
+func (m *UI) mcpCommand(args []string) tea.Cmd {
+	return func() tea.Msg {
+		if len(args) == 0 || args[0] == "list" {
+			states := m.com.Workspace.MCPGetStates()
+			cfg := m.com.Config()
+			names := make([]string, 0, len(states))
+			if cfg != nil {
+				for name := range cfg.MCP {
+					names = append(names, name)
+				}
+			} else {
+				for name := range states {
+					names = append(names, name)
+				}
+			}
+			slices.Sort(names)
+			if len(names) == 0 {
+				return util.NewWarnMsg("No MCP servers configured")
+			}
+			parts := make([]string, 0, len(names))
+			for _, name := range names {
+				state := "configured"
+				if info, ok := states[name]; ok {
+					state = info.State.String()
+				}
+				parts = append(parts, fmt.Sprintf("%s=%s", name, state))
+			}
+			return util.NewInfoMsg("MCP: " + strings.Join(parts, ", "))
+		}
+		if len(args) < 2 {
+			return util.NewInfoMsg("Usage: /mcp list|enable|disable|refresh <name>")
+		}
+		action, name := args[0], args[1]
+		switch action {
+		case "enable", "start":
+			if err := m.com.Workspace.EnableMCP(context.Background(), name); err != nil {
+				return util.NewErrorMsg(err)
+			}
+			return util.NewInfoMsg("MCP enabled: " + name)
+		case "disable", "stop":
+			if err := m.com.Workspace.DisableMCP(name); err != nil {
+				return util.NewErrorMsg(err)
+			}
+			return util.NewInfoMsg("MCP disabled: " + name)
+		case "refresh":
+			m.com.Workspace.RefreshMCPTools(context.Background(), name)
+			m.com.Workspace.MCPRefreshPrompts(context.Background(), name)
+			m.com.Workspace.MCPRefreshResources(context.Background(), name)
+			return util.NewInfoMsg("MCP refreshed: " + name)
+		default:
+			return util.NewInfoMsg("Usage: /mcp list|enable|disable|refresh <name>")
+		}
+	}
+}
+
+func resolveSlashModel(cfg *config.Config, modelArg string) (config.SelectedModel, error) {
+	providerID, modelID, ok := strings.Cut(modelArg, "/")
+	if ok {
+		return resolveProviderModel(cfg, providerID, modelID)
+	}
+
+	var matches []config.SelectedModel
+	for providerID, providerCfg := range cfg.Providers.Seq2() {
+		for _, model := range providerCfg.Models {
+			if model.ID == modelArg {
+				matches = append(matches, config.SelectedModel{Provider: providerID, Model: modelArg, MaxTokens: model.DefaultMaxTokens})
+			}
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return config.SelectedModel{}, fmt.Errorf("model %q not found", modelArg)
+	case 1:
+		return matches[0], nil
+	default:
+		providers := make([]string, len(matches))
+		for i, match := range matches {
+			providers[i] = match.Provider
+		}
+		slices.Sort(providers)
+		return config.SelectedModel{}, fmt.Errorf("model %q exists in multiple providers: %s", modelArg, strings.Join(providers, ", "))
+	}
+}
+
+func resolveProviderModel(cfg *config.Config, providerID, modelID string) (config.SelectedModel, error) {
+	providerCfg, ok := cfg.Providers.Get(providerID)
+	if !ok {
+		return config.SelectedModel{}, fmt.Errorf("provider %q not found", providerID)
+	}
+	if modelID == "" {
+		if current, ok := cfg.Models[config.SelectedModelTypeLarge]; ok && current.Provider == providerID {
+			modelID = current.Model
+		} else if len(providerCfg.Models) > 0 {
+			modelID = providerCfg.Models[0].ID
+		}
+	}
+	if modelID == "" {
+		return config.SelectedModel{}, fmt.Errorf("provider %q has no selectable models", providerID)
+	}
+	for _, model := range providerCfg.Models {
+		if model.ID == modelID {
+			return config.SelectedModel{Provider: providerID, Model: modelID, MaxTokens: model.DefaultMaxTokens}, nil
+		}
+	}
+	return config.SelectedModel{}, fmt.Errorf("model %q not found in provider %q", modelID, providerID)
+}
+
+func (m *UI) expandAutoTriggeredSkills(ctx context.Context, content string) string {
+	cfg := m.com.Config()
+	if cfg == nil || cfg.Options == nil || (cfg.Options.SkillAutoTrigger != nil && !*cfg.Options.SkillAutoTrigger) {
+		return content
+	}
+	if strings.Contains(content, "<skill_use_request>") || strings.Contains(content, "<loaded_skill>") {
+		return content
+	}
+	entries, err := m.com.Workspace.ListSkills(ctx)
+	if err != nil {
+		slog.Warn("Failed to list skills for auto-trigger", "error", err)
+		return content
+	}
+	var injected []string
+	for _, entry := range entries {
+		skill := &skills.Skill{
+			Name:          entry.Name,
+			Description:   entry.Description,
+			SkillFilePath: entry.ID,
+		}
+		if !skills.MatchPrompt(content, skill) {
+			continue
+		}
+		injected = append(injected, skill.FormatInvocation())
+		if len(injected) >= 3 {
+			break
+		}
+	}
+	if len(injected) == 0 {
+		return content
+	}
+	return strings.Join(injected, "\n\n") + "\n\n" + content
+}
+
 // sendMessage sends a message with the given content and attachments.
 func (m *UI) sendMessage(content string, attachments ...message.Attachment) tea.Cmd {
 	if !m.com.Workspace.AgentIsReady() {
 		return util.ReportError(fmt.Errorf("coder agent is not initialized"))
+	}
+
+	// Process attachments: OCR images if model doesn't support images
+	if !m.currentModelSupportsImages() {
+		processed := make([]message.Attachment, 0, len(attachments))
+		for _, att := range attachments {
+			if isImageAttachment(att) {
+				processed = append(processed, ocrImage(context.Background(), att))
+			} else {
+				processed = append(processed, att)
+			}
+		}
+		attachments = processed
 	}
 
 	var cmds []tea.Cmd
@@ -3291,7 +3586,8 @@ func (m *UI) sendMessage(content string, attachments ...message.Attachment) tea.
 		// been accepted (HTTP 202) or synchronously with a validation
 		// or transport error. Run failures and cancellation surface
 		// through SSE-derived events, not this return value.
-		err := m.com.Workspace.AgentRun(context.Background(), sessionID, content, attachments...)
+		prompt := m.expandAutoTriggeredSkills(context.Background(), content)
+		err := m.com.Workspace.AgentRun(context.Background(), sessionID, prompt, attachments...)
 		if err != nil {
 			return util.InfoMsg{
 				Type: util.InfoTypeError,
@@ -3620,6 +3916,19 @@ func (m *UI) newSession() tea.Cmd {
 
 // handlePasteMsg handles a paste message.
 func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
+	// DEBUG: Write to file to confirm this runs
+	os.WriteFile("/tmp/crush_paste_debug.log", []byte(fmt.Sprintf("handlePasteMsg called at %s\n", time.Now())), 0644)
+	
+	// Try to read image from clipboard first
+	imageData, err := readClipboard(clipboardFormatImage)
+	os.WriteFile("/tmp/crush_paste_debug.log", []byte(fmt.Sprintf("clipboard read: len=%d err=%v\n", len(imageData), err)), 0644)
+	if err == nil && len(imageData) > 0 {
+		slog.Info("PasteMsg: found image in clipboard", "size", len(imageData))
+		return m.pasteImageFromClipboard
+	}
+
+	// Fallback to text paste
+	slog.Info("PasteMsg: no image, handling as text paste")
 	// Normalize \r\n before the textarea sanitizer sees it.
 	msg.Content = strings.ReplaceAll(msg.Content, "\r\n", "\n")
 
@@ -3739,7 +4048,9 @@ func (m *UI) handleFilePathPaste(path string) tea.Cmd {
 // creates an attachment. If no image data is found, it falls back to
 // interpreting clipboard text as a file path.
 func (m *UI) pasteImageFromClipboard() tea.Msg {
+	slog.Info("pasteImageFromClipboard called")
 	imageData, err := readClipboard(clipboardFormatImage)
+	slog.Info("readClipboard result", "hasData", len(imageData) > 0, "err", err)
 	if int64(len(imageData)) > common.MaxAttachmentSize {
 		return util.InfoMsg{
 			Type: util.InfoTypeError,
