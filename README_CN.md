@@ -14,6 +14,7 @@
 ## Fork 改动
 
 - ⚡ **禁用自动标题生成** - 节省 50% API 调用（每次对话不再重复请求）
+- 📋 **支持粘贴截图** - Cmd+V (macOS) / Ctrl+V (Win/Linux) 直接粘贴剪贴板截图发送给 AI
 - 🔧 基于上游 [charmbracelet/crush](https://github.com/charmbracelet/crush)
 
 ## 特性

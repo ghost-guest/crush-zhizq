@@ -15,6 +15,7 @@ English | [简体中文](README_CN.md)
 ## Fork Changes
 
 - ⚡ **Disabled auto title generation** - Saves 50% API calls (no more double requests per conversation)
+- 📋 **Screenshot paste support** - Cmd+V (macOS) / Ctrl+V (Win/Linux) to directly paste clipboard screenshots to AI
 - 🔧 Based on upstream [charmbracelet/crush](https://github.com/charmbracelet/crush)
 
 ## Features

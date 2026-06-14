@@ -923,7 +923,35 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// DEBUG: Log all key presses
 		f, _ := os.OpenFile("/tmp/crush_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		fmt.Fprintf(f, "KeyPressMsg: %v\n", msg.String())
+		fmt.Fprintf(f, "🔍 KeyPressMsg received: msgString=%v state=%v uiChat=%v matches=%v\n", msg.String(), m.state, uiChat, msg.String() == "enter")
 		f.Close()
+		
+		// 🎯 CRITICAL FIX: Handle Enter key directly here before calling handleKeyPressMsg
+		if msg.String() == "enter" && m.state == uiChat {
+			f2, _ := os.OpenFile("/tmp/crush_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			fmt.Fprintf(f2, "🔥 Enter key detected in Update(), sending message with attachments, attachmentsCount=%v\n", len(m.attachments.List()))
+			f2.Close()
+			prevHeight := m.textarea.Height()
+			value := m.textarea.Value()
+			_, endsWithBackslash := strings.CutSuffix(value, "\\")
+			if !endsWithBackslash {
+				// Not ending with backslash, send the message
+				m.textarea.Reset()
+				if cmd := m.handleTextareaHeightChange(prevHeight); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				if cmd, ok := m.handleSlashCommand(value); ok {
+					m.randomizePlaceholders()
+					m.historyReset()
+					cmds = append(cmds, cmd)
+				} else {
+					m.historyReset()
+					attachments := m.attachments.List()
+					cmd := m.sendMessage(value, attachments...)
+					cmds = append(cmds, cmd)
+				}
+			}
+		}
 		
 		if cmd := m.handleKeyPressMsg(msg); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -1823,6 +1851,8 @@ func (m *UI) openAuthenticationDialog(provider catwalk.Provider, model config.Se
 }
 
 func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
+	slog.Info("🔍 handleKeyPressMsg called", "msgString", msg.String(), "msgType", fmt.Sprintf("%T", msg))
+	
 	var cmds []tea.Cmd
 
 	handleGlobalKeys := func(msg tea.KeyPressMsg) bool {
@@ -1957,6 +1987,44 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				return tea.Batch(cmds...)
 			}
 
+
+		// Handle Enter key directly (KeyPressMsg doesn't work with key.Matches)
+		if msg.String() == "enter" {
+			attachments := m.attachments.List()
+			slog.Info("🎯 Enter pressed in handleKeyPressMsg", "attachmentsCount", len(attachments))
+			
+			prevHeight := m.textarea.Height()
+			value := m.textarea.Value()
+			if before, ok := strings.CutSuffix(value, "\\"); ok {
+				// If the last character is a backslash, remove it and add a newline.
+				m.textarea.SetValue(before)
+				if cmd := m.handleTextareaHeightChange(prevHeight); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			} else {
+				// Otherwise, send the message
+				m.textarea.Reset()
+				if cmd := m.handleTextareaHeightChange(prevHeight); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				if cmd, ok := m.handleSlashCommand(value); ok {
+					m.randomizePlaceholders()
+					m.historyReset()
+					return tea.Batch(cmd, m.loadPromptHistory())
+				}
+
+				attachments := m.attachments.List()
+				m.attachments.Reset()
+				if len(value) == 0 && !message.ContainsTextAttachment(attachments) {
+					return nil
+				}
+
+				m.randomizePlaceholders()
+				m.historyReset()
+
+				return tea.Batch(m.sendMessage(value, attachments...), m.loadPromptHistory())
+			}
+		}
 			switch {
 			case key.Matches(msg, m.keyMap.Editor.AddImage):
 				if cmd := m.openFilesDialog(); cmd != nil {
@@ -3537,6 +3605,14 @@ func (m *UI) expandAutoTriggeredSkills(ctx context.Context, content string) stri
 
 // sendMessage sends a message with the given content and attachments.
 func (m *UI) sendMessage(content string, attachments ...message.Attachment) tea.Cmd {
+	// 🎯 诊断日志：记录函数入口的参数
+	f, _ := os.OpenFile("/tmp/crush_sendmsg.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	fmt.Fprintf(f, "🎯 sendMessage called: content=%q, attachments_len=%d\n", content, len(attachments))
+	for i, att := range attachments {
+		fmt.Fprintf(f, "  [%d] FileName=%q, FilePath=%q, MimeType=%q, Content_len=%d\n", i, att.FileName, att.FilePath, att.MimeType, len(att.Content))
+	}
+	f.Close()
+	
 	if !m.com.Workspace.AgentIsReady() {
 		return util.ReportError(fmt.Errorf("coder agent is not initialized"))
 	}
@@ -3587,6 +3663,30 @@ func (m *UI) sendMessage(content string, attachments ...message.Attachment) tea.
 		// or transport error. Run failures and cancellation surface
 		// through SSE-derived events, not this return value.
 		prompt := m.expandAutoTriggeredSkills(context.Background(), content)
+		
+		// 🎯 关键修复：将所有 attachment 的 FilePath 拼接到 prompt 前面
+		// 这样 AI 就能通过路径读取文件了
+		if len(attachments) > 0 {
+			var filePaths []string
+			for _, att := range attachments {
+				if att.FilePath != "" {
+					filePaths = append(filePaths, att.FilePath)
+				}
+			}
+			if len(filePaths) > 0 {
+				// 格式："/path/to/file1.png /path/to/file2.jpg 用户输入的内容"
+				prompt = strings.Join(filePaths, " ") + " " + prompt
+			}
+		}
+		
+		// 🎯 诊断日志：记录调用 AgentRun 前的参数
+		f, _ := os.OpenFile("/tmp/crush_agentrun.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		fmt.Fprintf(f, "🔥 Calling AgentRun: sessionID=%q, prompt=%q, attachments_len=%d\n", sessionID, prompt, len(attachments))
+		for i, att := range attachments {
+			fmt.Fprintf(f, "  [%d] FilePath=%q, Content_len=%d\n", i, att.FilePath, len(att.Content))
+		}
+		f.Close()
+		
 		err := m.com.Workspace.AgentRun(context.Background(), sessionID, prompt, attachments...)
 		if err != nil {
 			return util.InfoMsg{
@@ -4050,17 +4150,46 @@ func (m *UI) handleFilePathPaste(path string) tea.Cmd {
 func (m *UI) pasteImageFromClipboard() tea.Msg {
 	slog.Info("pasteImageFromClipboard called")
 	imageData, err := readClipboard(clipboardFormatImage)
-	slog.Info("readClipboard result", "hasData", len(imageData) > 0, "err", err)
+	slog.Info("readClipboard result", "dataLen", len(imageData), "hasData", len(imageData) > 0, "err", err)
+	
+	if err != nil {
+		slog.Warn("readClipboard image failed, will try text path", "err", err, "dataLen", len(imageData))
+	}
+	
+	// Check if data is too large
 	if int64(len(imageData)) > common.MaxAttachmentSize {
+		slog.Warn("Image data too large", "size", len(imageData), "max", common.MaxAttachmentSize)
 		return util.InfoMsg{
 			Type: util.InfoTypeError,
 			Msg:  "File too large, max 5MB",
 		}
 	}
+	
 	name := fmt.Sprintf("paste_%d.png", m.pasteIdx())
-	if err == nil {
+	
+	// CRITICAL FIX: If we have image data, return it even if there's a format error
+	// QQ screenshot puts data in clipboard but with unexpected format code
+	if len(imageData) > 0 {
+		// 🎯 FIX: 创建临时文件并使用完整路径，而不是相对路径
+		tempFile, err := os.CreateTemp("", "crush_paste_*.png")
+		if err != nil {
+			slog.Error("Failed to create temp file", "err", err)
+			return util.ReportError(fmt.Errorf("failed to create temp file: %w", err))
+		}
+		defer tempFile.Close()
+		
+		// 写入图片数据
+		if _, err := tempFile.Write(imageData); err != nil {
+			slog.Error("Failed to write temp file", "err", err)
+			os.Remove(tempFile.Name())
+			return util.ReportError(fmt.Errorf("failed to write temp file: %w", err))
+		}
+		
+		fullPath := tempFile.Name()
+		slog.Info("Returning attachment from clipboard image data (ignoring format error)", "name", name, "fullPath", fullPath, "size", len(imageData), "err", err)
+		
 		return message.Attachment{
-			FilePath: name,
+			FilePath: fullPath,  // 🎯 使用完整路径而不是 name
 			FileName: name,
 			MimeType: mimeOf(imageData),
 			Content:  imageData,
